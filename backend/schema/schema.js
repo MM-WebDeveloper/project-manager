@@ -5,6 +5,7 @@ const {
 	GraphQLSchema,
 	GraphQLList,
 	GraphQLNonNull,
+	GraphQLEnumType,
 } = require('graphql');
 
 const Project = require('../models/Project');
@@ -81,7 +82,13 @@ const mutation = new GraphQLObjectType({
 				email: { type: GraphQLNonNull(GraphQLString) },
 				phone: { type: GraphQLNonNull(GraphQLString) },
 			},
-			resolve(parent, args) {
+			async resolve(parent, args) {
+				const duplicate = await Client.findOne({ email: args.email }).exec();
+
+				if (duplicate) {
+					throw new Error('Try another email');
+				}
+
 				const client = new Client({
 					name: args.name,
 					email: args.email,
@@ -89,6 +96,45 @@ const mutation = new GraphQLObjectType({
 				});
 
 				return client.save();
+			},
+		},
+		deleteClient: {
+			type: ClientType,
+			args: {
+				id: { type: GraphQLNonNull(GraphQLID) },
+			},
+			async resolve(parent, args) {
+				const client = await Client.findByIdAndRemove(args.id);
+				return client;
+			},
+		},
+		addProject: {
+			type: ProjectType,
+			args: {
+				name: { type: GraphQLNonNull(GraphQLString) },
+				description: { type: GraphQLNonNull(GraphQLString) },
+				status: {
+					type: new GraphQLEnumType({
+						name: 'ProjectStatus',
+						values: {
+							new: { value: 'Not Started' },
+							progress: { value: 'In Progress' },
+							completed: { value: 'Completed' },
+						},
+					}),
+					defaultValue: 'Not Started',
+				},
+				clientId: { type: GraphQLNonNull(GraphQLID) },
+			},
+			resolve(parent, args) {
+				const project = new Project({
+					name: args.name,
+					description: args.description,
+					status: args.status,
+					clientId: args.clientId,
+				});
+
+				return project.save();
 			},
 		},
 	},
